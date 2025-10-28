@@ -9,11 +9,11 @@ primary_region = "iad"
   API_KEY = "change-me"
 
 [[services]]
-  internal_port = 8080
+  internal_port = 8001
   protocol = "tcp"
 
 [http_service]
-  internal_port = 8080
+  internal_port = 8001
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true
