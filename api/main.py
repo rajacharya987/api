@@ -1,10 +1,11 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
-import requests, os, uuid, asyncio, time
+import os, uuid
+import httpx
 
-# Configuration: set RUNNER_URL to the runner service (http(s)://host:port)
-RUNNER_URL = os.getenv("RUNNER_URL", "http://runner:8001")  # in docker-compose or internal network
-API_KEY = os.getenv("API_KEY", "change-me")
+# Configuration
+RUNNER_URL = os.getenv("RUNNER_URL", "http://runner:8001")
+API_KEY = os.getenv("API_KEY", "letmeinboss")
 
 app = FastAPI(title="CodeAcademy Execution API (proxy to runner)")
 
@@ -15,20 +16,31 @@ def check_api_key(key: str):
 async def execute(language: str = Form(...), source: UploadFile = File(...), api_key: str = Form(...)):
     if not check_api_key(api_key):
         raise HTTPException(status_code=401, detail="invalid api key")
+
     src = await source.read()
     job_id = str(uuid.uuid4())
     files = {'source': ('source', src)}
     data = {"language": language, "job_id": job_id, "timeout": "5"}
-    # send to runner
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.post(f"{RUNNER_URL}/run", data=data, files=files)
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"Runner request failed: {str(e)}")
+
     try:
-        resp = requests.post(f"{RUNNER_URL}/run", data=data, files=files, timeout=10)
-    except requests.RequestException as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    if resp.status_code != 200:
-        # pass through runner error
-        return JSONResponse(status_code=resp.status_code, content=resp.json())
-    return JSONResponse(status_code=200, content=resp.json())
+        resp_json = resp.json()
+    except ValueError:
+        raise HTTPException(status_code=502, detail="Invalid JSON response from runner")
+
+    return JSONResponse(status_code=resp.status_code, content=resp_json)
 
 @app.get("/health")
 def health():
     return {"ok": True}
+
+# If running directly with Python (optional for Fly.io)
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
