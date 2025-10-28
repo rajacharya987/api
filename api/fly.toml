@@ -1,0 +1,17 @@
+app = "codeacademy-api"
+primary_region = "iad"
+
+[build]
+  image = "registry.fly.io/codeacademy-api:latest"
+
+[env]
+  RUNNER_URL = "http://runner-host-or-ip:8001"
+  API_KEY = "change-me"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
